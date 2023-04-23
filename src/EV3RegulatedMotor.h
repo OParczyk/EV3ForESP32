@@ -1,6 +1,12 @@
 #include <Arduino.h>
 #include <ESP32Encoder.h>
 
+#define DRV8833
+
+#ifdef DRV8833
+#include "driver/mcpwm.h"
+#endif
+
 #ifndef EV3RegulatedMotor_h
 #define EV3RegulatedMotor_h
 
@@ -11,7 +17,8 @@ enum struct EV3RegulationType : uint8_t
 {
     NONE,
     POSITION,
-    SPEED
+    SPEED,
+    POSITION_AND_SPEED,
 };
 
 /**
@@ -38,15 +45,29 @@ private:
     constexpr static double PWM_MAX = 255;
     constexpr static double PWM_MIN = -1 * PWM_MAX;
 
+#ifdef DRV8833
+    static const mcpwm_unit_t  drv8833_mcpwm_unit  = MCPWM_UNIT_0;
+    static char used_mcpwm_pairs;
+    mcpwm_io_signals_t MOTOR_A;
+    mcpwm_io_signals_t MOTOR_B;
+    mcpwm_timer_t TIMER;
+    mcpwm_config_t mcpwm_config;
+#endif
+
     // PID control variables for position control.
     const double KP_POS_CTRL = 25.0;
     const double KI_POS_CTRL = -2.0;
     const double KD_POS_CTRL = 20.0;
+    //PID control values for speed control
+    const double KP_SPEED_CTRL = 2.5;
+    const double KI_SPEED_CTRL = 1.5;
+    const double KD_SPEED_CTRL = -0.5;
 
     // PID control parameters
     double _Kp = KP_POS_CTRL, _Ki = KI_POS_CTRL, _Kd = KD_POS_CTRL;
     // PID error sum
-    double _outputSum = 0.0;
+    double _outputSumPos = 0.0;
+    double _outputSumSpeed = 0.0;
 
     // Quadrature encoder used to determine position
     ESP32Encoder encoder;
@@ -75,8 +96,46 @@ private:
     double _speed = 0;
     // Speed in last regulation cycle
     double _prev_speed = 0;
-    // Current motor stae.
+    // Max speed for position and speed control
+    int32_t _max_speed = 0;
+    // Current motor state.
     EV3MotorState _motorState = EV3MotorState::COAST;
+
+#ifdef DRV8833
+    static char get_mcpwm_motor_channels(mcpwm_io_signals_t channel_array[]){
+        switch (used_mcpwm_pairs)
+        {
+        case 0:
+            channel_array[0]=MCPWM0A, channel_array[1] = MCPWM0B;
+            used_mcpwm_pairs++;
+            return 0;
+        case 1:
+            channel_array[0]=MCPWM1A, channel_array[1] = MCPWM1B;
+            used_mcpwm_pairs++;
+            return 1;
+        case 2:
+            channel_array[0]=MCPWM2A, channel_array[1] = MCPWM2B;
+            used_mcpwm_pairs++;
+            return 2;
+        default:
+            return 255;
+        }
+    }
+
+    static mcpwm_timer_t get_timer(char channel){
+        switch (channel)
+        {
+        case 0:
+            return MCPWM_TIMER_0;
+        case 1:
+            return MCPWM_TIMER_1;
+        case 2:
+            return MCPWM_TIMER_2;
+        default:
+            return MCPWM_TIMER_MAX;
+        }
+    }
+#endif /* DRV8833 */
 
     /*
      * Utility method to bind a class method to a FreeRTOS task.
@@ -159,5 +218,10 @@ public:
      * Sets the speed of the motor (PID regulated)
      */
     void setSpeed(int32_t speed);
+
+    /**
+     * Moves motor to given relative position, using the given speed
+    */
+    void setPositionSpeed(int64_t position, int32_t speed);
 };
 #endif

@@ -70,9 +70,9 @@ bool EV3SensorPort::parseModeCount(byte header, EV3SensorConfig *config)
     _connection->readBytes(_buffer + 1, 3);
     if (calculateChecksum(_buffer, 3) == _buffer[3])
     {
-        config->modes = _buffer[1] + 1;
+        config->num_modes = _buffer[1] + 1;
         config->modes_shown = _buffer[2] + 1;
-        ESP_LOGV(TAG, "Found EV3 sensor with %d modes and %d modes presented.", config->modes, config->modes_shown);
+        ESP_LOGV(TAG, "Found EV3 sensor with %d num_modes and %d num_modes presented.", config->num_modes, config->modes_shown);
         return true;
     }
     else
@@ -107,7 +107,7 @@ float EV3SensorPort::makeFloatFromPayload(uint8_t data[])
     return result;
 }
 
-bool EV3SensorPort::parseInfoMessage(byte message, EV3SensorInfo *info)
+bool EV3SensorPort::parseInfoMessage(byte message, EV3SensorMode *info)
 {
     _buffer[0] = message;
     _connection->readBytes(_buffer + 1, 1);
@@ -147,7 +147,7 @@ bool EV3SensorPort::parseUnknownMessage(byte *header)
     _buffer[1] = header[1];
 
     // Read bytes until the checksum fits
-    uint8_t msgLenght = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
+    uint8_t msgLength = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
     uint8_t mode = _buffer[0] & 0b111;
     uint8_t msglength = 2;
     uint8_t checksum = 0;
@@ -158,7 +158,7 @@ bool EV3SensorPort::parseUnknownMessage(byte *header)
         if (calculateChecksum(_buffer, msglength - 1) == checksum)
         {
             // Message found !!!
-            ESP_LOGD(TAG, "Unknown message %x (mode = %d, length = %d) for sensor mode %d", _buffer[0], mode, msgLenght, _buffer[1]);
+            ESP_LOGD(TAG, "Unknown message %x (mode = %d, length = %d) for sensor mode %d", _buffer[0], mode, msgLength, _buffer[1]);
             break;
         }
         else
@@ -171,22 +171,22 @@ bool EV3SensorPort::parseUnknownMessage(byte *header)
     return true;
 }
 
-bool EV3SensorPort::parseSymbolNameMessage(byte *header, EV3SensorInfo *info)
+bool EV3SensorPort::parseSymbolNameMessage(byte *header, EV3SensorMode *info)
 {
-    uint8_t msgLenght = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
+    uint8_t msgLength = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
 
     // Copy header to payload to simplify checksum calculation
     _buffer[0] = header[0];
     _buffer[1] = header[1];
 
     // Read the message string
-    _connection->readBytes(_buffer + 2, msgLenght + 1); // Msg + checksum
+    _connection->readBytes(_buffer + 2, msgLength + 1); // Msg + checksum
 
-    if (calculateChecksum(_buffer, msgLenght + 2) == _buffer[msgLenght + 2])
+    if (calculateChecksum(_buffer, msgLength + 2) == _buffer[msgLength + 2])
     {
         info->mode = _buffer[0] & 0b111;
         // Check actual name length
-        info->siSymbol = makeStringFromPayload(_buffer + 2, msgLenght);
+        info->siSymbol = makeStringFromPayload(_buffer + 2, msgLength);
         ESP_LOGV(TAG, "Found symbol '%s' for sensor mode %d", info->siSymbol, info->mode);
         return true;
     }
@@ -197,22 +197,23 @@ bool EV3SensorPort::parseSymbolNameMessage(byte *header, EV3SensorInfo *info)
     }
 }
 
-bool EV3SensorPort::parseModeNameMessage(byte *header, EV3SensorInfo *info)
+bool EV3SensorPort::parseModeNameMessage(byte *header, EV3SensorMode *info)
 {
-    uint8_t msgLenght = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
+    uint8_t msgLength = 1 << ((header[0] & 0b00111000) >> 3); // 2^LLL;
 
     // Copy header to payload to simplify checksum calculation
     _buffer[0] = header[0];
     _buffer[1] = header[1];
 
     // Read the message string
-    _connection->readBytes(_buffer + 2, msgLenght + 1); // Msg + checksum
+    _connection->readBytes(_buffer + 2, msgLength + 1); // Msg + checksum
 
-    if (calculateChecksum(_buffer, msgLenght + 2) == _buffer[msgLenght + 2])
+    if (calculateChecksum(_buffer, msgLength + 2) == _buffer[msgLength + 2])
     {
         info->mode = _buffer[0] & 0b111;
         // Check actual name length
-        info->name = makeStringFromPayload(_buffer + 2, msgLenght);
+        info->name = makeStringFromPayload(_buffer + 2, msgLength);
+
         ESP_LOGV(TAG, "Found name '%s' for sensor mode %d", info->name, info->mode);
         return true;
     }
@@ -223,7 +224,7 @@ bool EV3SensorPort::parseModeNameMessage(byte *header, EV3SensorInfo *info)
     }
 }
 
-bool EV3SensorPort::parseFormatMessage(byte *header, EV3SensorInfo *info)
+bool EV3SensorPort::parseFormatMessage(byte *header, EV3SensorMode *info)
 {
     _buffer[0] = header[0];
     _buffer[1] = header[1];
@@ -247,7 +248,7 @@ bool EV3SensorPort::parseFormatMessage(byte *header, EV3SensorInfo *info)
     }
 }
 
-bool EV3SensorPort::parseModeRangeMessage(byte *header, EV3SensorInfo *info)
+bool EV3SensorPort::parseModeRangeMessage(byte *header, EV3SensorMode *info)
 {
     _buffer[0] = header[0];
     _buffer[1] = header[1];
@@ -299,6 +300,7 @@ void EV3SensorPort::selectSensorMode(uint8_t mode)
     _buffer[2] = this->calculateChecksum(_buffer, 2);
     _connection->write(_buffer, 3);
     _connection->flush();
+    _expected_mode_num = mode;
     xSemaphoreGive(_serialMutex);
 }
 
@@ -350,7 +352,7 @@ void EV3SensorPort::sensorInit()
                     this->sensorInit();
                     return;
                 }
-                _config.infos = new EV3SensorInfo[_config.modes];
+                _config.modes = new EV3SensorMode[_config.num_modes];
             }
             else if (message == SPEED)
             {
@@ -374,8 +376,8 @@ void EV3SensorPort::sensorInit()
             {
                 // Found info message
                 byte modeNumber = message & 0b111;
-                EV3SensorInfo info = _config.infos[modeNumber];
-                if (!this->parseInfoMessage(message, &info))
+                EV3SensorMode *info = &_config.modes[modeNumber];
+                if (!this->parseInfoMessage(message, info))
                 {
                     ESP_LOGE(TAG, "Failed to parse sensor info message -> restart (%d retries left)", retries - 1);
                     xSemaphoreGive(_serialMutex);
@@ -420,22 +422,41 @@ void EV3SensorPort::begin(std::function<void(EV3SensorPort *)> onSuccess, int re
     );
 }
 
+void EV3SensorPort::begin_pinned(std::function<void(EV3SensorPort *)> onSuccess, int retries, BaseType_t core)
+{
+    stop();
+    this->_onSuccess = onSuccess;
+    this->retries = retries;
+
+    xTaskCreatePinnedToCore(
+        &sensorInitHelper,
+        "EV3Sensor",
+        50000,
+        this,
+        1,
+        &_sensorHandle, // Task handle
+        core
+    );
+}
+
 /**
- * Utility method to get get EV3SensorInfo for a mode
+ * Utility method to get get EV3SensorMode for a mode
  */
-EV3SensorInfo *EV3SensorPort::getInfoForMode(uint8_t mode)
+EV3SensorMode *EV3SensorPort::getInfoForMode(uint8_t mode)
 {
     if (getCurrentConfig())
     {
         auto config = getCurrentConfig();
-        for (int i = 0; i < config->modes; i++)
+        for (int i = 0; i < config->num_modes; i++)
         {
-            if (config->infos[i].mode == mode)
+            if (config->modes[i].mode == mode)
             {
-                return &config->infos[i];
+                return &config->modes[i];
             }
         }
+        ESP_LOGV(TAG, "current sensor config exists, but no mode %d. There are %d modes.", mode, config->num_modes);
     }
+    ESP_LOGV(TAG, "no current sensor config");
     return nullptr;
 }
 
@@ -449,25 +470,100 @@ void EV3SensorPort::sensorCommThread()
         {
             // Clear buffer
             std::fill(_buffer, _buffer + BUFFER_SIZE, 0);
-            uint8_t message = _connection->read();
-            if (message & 0b11000000)
-            {
-                uint8_t mode = message & 0b111;
-                uint8_t msgLenght = 1 << ((message & 0b00111000) >> 3); // 2^LLL;
 
-                _buffer[0] = message;
-                _connection->readBytes(_buffer + 1, msgLenght + 1);
-                if (calculateChecksum(_buffer, msgLenght + 1) == _buffer[msgLenght + 1])
+            uint8_t message = _connection->read();
+            _buffer[0] = message;
+
+            // skip checksum check, if it's a color sensor in RGB RAW:
+            // https://sourceforge.net/p/lejos/wiki/UART%20Sensor%20Protocol/#other-issues-and-broken-sensors
+            // might need more investigation.
+            if (_config.type == 29 && _expected_mode_num == 4)
+            {
+                if (message == 0xDC)
                 {
-                    if (this->_onMessage)
+                    _connection->readBytes(_buffer + 1, 8 + 1);
+                    if (_buffer[2] <= 0b00000011 && _buffer[4] <= 0b00000011 && _buffer[6] <= 0b00000011)
                     {
-                        _onMessage(mode, _buffer + 1, msgLenght);
+                        // we don't have a checksum, but we know the max RGB values.
+                        if (this->_onMessage)
+                        {
+                            _onMessage(4, _buffer + 1, 8);
+                        }
+                        timeout_cnt = millis() + TIMEOUT;
                     }
-                    timeout_cnt = millis() + TIMEOUT;
                 }
-                else
+            }
+            else
+            {
+                if (message & 0b11000000 == 0b11000000)
                 {
-                    ESP_LOGV(TAG, "Got data message from sensor for mode %d with length %d but wrong checksum.", mode, msgLenght);
+
+                    uint8_t mode = message & 0b111;
+                    uint8_t msgLength = 1 << ((message & 0b00111000) >> 3);
+
+                    _connection->readBytes(_buffer + 1, msgLength + 1);
+
+                    if (calculateChecksum(_buffer, msgLength + 1) == _buffer[msgLength + 1])
+                    {
+                        if (this->_onMessage)
+                        {
+                            _onMessage(mode, _buffer + 1, msgLength);
+                        }
+                        timeout_cnt = millis() + TIMEOUT;
+                    }
+                    else
+                    {
+                        if (error_correction_en)
+                        {
+                            ESP_LOGV(TAG, "Got data message from sensor for mode %d with length %d but wrong checksum. Attempting correction...", mode, msgLength);
+                            // try setting mode and length to expected values
+                            _expected_mode = getInfoForMode(_expected_mode_num);
+
+                            mode = _expected_mode->mode;
+                            ESP_LOGV(TAG, "mode set.");
+                            switch (_expected_mode->dataTypeOfItem)
+                            {
+                            case EV3Datatype::INT8:
+                                msgLength = _expected_mode->numberOfItems;
+                                break;
+                            case EV3Datatype::INT16:
+                                msgLength = _expected_mode->numberOfItems * 2;
+                                break;
+                            case EV3Datatype::INT32:
+                                msgLength = _expected_mode->numberOfItems * 4;
+                                break;
+                            case EV3Datatype::FLOAT32:
+                                msgLength = _expected_mode->numberOfItems * 4;
+                                break;
+                            default:
+                                ESP_LOGE(TAG, "Unknown EV3DataType!");
+                            }
+                            // round up msgLength to nearest power of 2
+                            msgLength = msgLength == 1 ? 1 : 1 << (32 - __builtin_clz(msgLength - 1));
+                            // reconstruct header byte
+                            message = (message & 0b11000000) + mode + (__builtin_ctz(msgLength) << 3);
+                            // ESP_LOGV(TAG,"reconstructed header: %x",message);
+                            _buffer[0] = message;
+                            // try again
+                            if (calculateChecksum(_buffer, msgLength + 1) == _buffer[msgLength + 1])
+                            {
+                                ESP_LOGV(TAG, "Header was corrupted, but content seems fine.");
+                                if (this->_onMessage)
+                                {
+                                    _onMessage(mode, _buffer + 1, msgLength);
+                                }
+                                timeout_cnt = millis() + TIMEOUT;
+                            }
+                            else
+                            {
+                                ESP_LOGV(TAG, "Not just the header was corrupted, aborting.");
+                            }
+                        }
+                        else
+                        {
+                            ESP_LOGV(TAG, "Got data message from sensor for mode %d with length %d but wrong checksum.", mode, msgLength);
+                        }
+                    }
                 }
             }
         }

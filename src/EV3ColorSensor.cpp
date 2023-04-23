@@ -6,17 +6,27 @@ void EV3ColorSensor::messageHandler(uint8_t mode, uint8_t *message, int length)
 {
     switch (mode)
     {
-    case 0:
+    case (uint8_t) EV3ColorSensorMode::COL_REFLECT:
         if (onColReflect)
             onColReflect(message[0]);
         break;
-    case 1:
+    case (uint8_t) EV3ColorSensorMode::COL_AMBIENT:
         if (onColAmbient)
             onColAmbient(message[0]);
         break;
-    case 2:
+    case (uint8_t) EV3ColorSensorMode::COL_COLOR:
         if (onColColor)
             onColColor(static_cast<EV3ColorSensorColor>(message[0]));
+        break;
+    case (uint8_t) EV3ColorSensorMode::RGB_RAW:
+        if (onRGBRaw){
+            EV3ColorSensorRGB rgb;
+            rgb.r = ((unsigned short)message[1] << 8) | (unsigned char)message[0];
+            rgb.g = ((unsigned short)message[3] << 8) | (unsigned char)message[2];
+            rgb.b = ((unsigned short)message[5] << 8) | (unsigned char)message[4];
+            
+            onRGBRaw(rgb);
+        }
         break;
     default:
         ESP_LOGE(TAG, "Currently not supported EV3 color sensor mode %d", mode);

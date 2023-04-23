@@ -19,7 +19,7 @@ enum struct EV3Datatype : uint8_t
 /**
  * Describes a single mode of a EV3 sensor.
  */
-struct EV3SensorInfo
+struct EV3SensorMode
 {
     byte mode;
     char *name = nullptr;
@@ -43,11 +43,10 @@ struct EV3SensorInfo
 struct EV3SensorConfig
 {
     uint8_t type;
-    uint8_t modes = 0;
+    uint8_t num_modes = 0;
     uint8_t modes_shown = 0;
     uint32_t speed;
-
-    EV3SensorInfo *infos;
+    EV3SensorMode *modes;
 };
 
 /**
@@ -74,6 +73,14 @@ private:
      * Number of retries left to connect to sensor.
      */
     int retries = 9;
+
+    /**
+     * Expected mode. Used for error correction
+     *
+    */
+    EV3SensorMode *_expected_mode = nullptr;
+    uint8_t _expected_mode_num = 0;
+    bool error_correction_en = false;
 
     TaskHandle_t _sensorHandle;
 
@@ -102,7 +109,7 @@ private:
     /**
      * Use one single buffer for all communication to avoid heap fragrmentation.
      */
-    constexpr static size_t BUFFER_SIZE = 1 + 32 + 1;
+    constexpr static size_t BUFFER_SIZE = 1 + 512 + 1;
     uint8_t _buffer[BUFFER_SIZE];
 
     const static uint8_t SYNC = 0b00000000;
@@ -142,27 +149,27 @@ private:
      * Determines wheter the next message is a info message. If yes trie parse it and return the mode number.
      * If it is not, return the message byte.
      */
-    bool parseInfoMessage(byte message, EV3SensorInfo *info);
+    bool parseInfoMessage(byte message, EV3SensorMode *info);
 
     /**
      *  Parses the first info message (= mode name) for a supported mode
      */
-    bool parseModeNameMessage(byte *header, EV3SensorInfo *info);
+    bool parseModeNameMessage(byte *header, EV3SensorMode *info);
 
     /**
      * Parses the symbol name of the SI unit of a supported mode.
      */
-    bool parseSymbolNameMessage(byte *header, EV3SensorInfo *info);
+    bool parseSymbolNameMessage(byte *header, EV3SensorMode *info);
 
     /**
      * Pares the format message containing the format of the data message from sensor -> host.
      */
-    bool parseFormatMessage(byte *header, EV3SensorInfo *info);
+    bool parseFormatMessage(byte *header, EV3SensorMode *info);
 
     /**
      *  Parses the second info message (= mode raw sensor readings) for a supported mode
      */
-    bool parseModeRangeMessage(byte *header, EV3SensorInfo *info);
+    bool parseModeRangeMessage(byte *header, EV3SensorMode *info);
     /**
      * Parses the next uart speed from the stream.
      */
@@ -212,6 +219,20 @@ public:
     }
 
     /**
+     * Enables error correction attempts
+    */
+    void enableErrorCorrection(){
+        error_correction_en = true;
+    }
+
+    /**
+     * Disables error correction attempts
+    */
+    void disableErrorCorrection(){
+        error_correction_en = false;
+    }
+
+    /**
      *  Stops the EV3 Sensor communication and the corresponding task.
      */
     void stop();
@@ -222,9 +243,9 @@ public:
     void selectSensorMode(uint8_t mode);
 
     /**
-     * Utility method to get get EV3SensorInfo for a mode
+     * Utility method to get get EV3SensorMode for a mode
      */
-    EV3SensorInfo *getInfoForMode(uint8_t mode);
+    EV3SensorMode *getInfoForMode(uint8_t mode);
 
     /**
      * Makes a float from a sensor payload
@@ -237,5 +258,13 @@ public:
      * The method performs all commuincation in its own FreeRTOS task, there it returns immediately.
      */
     void begin(std::function<void(EV3SensorPort *)> onSuccess, int retries = 9);
+
+    /**
+     * Starts the EV3 sensor communication protocol.
+     * First reads the sensor configuration and calls the onSuccess callback afterwards. Then keeps the connection online by sending the sensor NACK regularly.
+     * The method performs all commuincation in its own FreeRTOS task, there it returns immediately.
+     * The Task will be pinned to the specified core, due to tight timing constraints this is sometimes needed.
+     */
+    void begin_pinned(std::function<void(EV3SensorPort *)> onSuccess, int retries = 9, BaseType_t core = 1);
 };
 #endif

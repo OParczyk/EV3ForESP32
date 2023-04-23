@@ -18,6 +18,12 @@ enum struct EV3ColorSensorColor : uint8_t
     BROWN = 7
 };
 
+struct EV3ColorSensorRGB {
+    ushort r;
+    ushort g;
+    ushort b;
+};
+
 /**
  * Utility method to create a humand readable string of a color.
  */
@@ -44,6 +50,7 @@ class EV3ColorSensor
 private:
     EV3SensorPort *_port;
 
+    std::function<void(EV3ColorSensorRGB)> onRGBRaw;
     std::function<void(byte)> onColReflect;
     std::function<void(byte)> onColAmbient;
     std::function<void(EV3ColorSensorColor)> onColColor;
@@ -89,6 +96,14 @@ public:
     void setOnColColor(std::function<void(EV3ColorSensorColor)> h)
     {
         this->onColColor = h;
+    }
+
+    /**
+     * Set the handler for RGB_RAW messages
+     */
+    void setOnRGBRaw(std::function<void(EV3ColorSensorRGB)> h)
+    {
+        this->onRGBRaw = h;
     }
 };
 #endif

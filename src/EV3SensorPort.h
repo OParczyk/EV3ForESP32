@@ -5,6 +5,8 @@
 #ifndef EV3SensorPort_h
 #define EV3SensorPort_h
 
+#define MIN_BUFFER_LEVEL 8
+
 /**
  * Supported data types for messages from the sensor to the host.
  */

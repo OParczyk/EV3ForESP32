@@ -324,8 +324,8 @@ void EV3SensorPort::sensorInit()
     byte message = 0;
     xSemaphoreTake(_serialMutex, portMAX_DELAY);
     this->_baudrateSetter(2400);
-    ESP_LOGV(TAG, "Waiting from the first TYPE message from the EV3 sensor. %d retries left", retries);
-    // First wait for the first TYPE message. Its always the first message!!!!
+    ESP_LOGV(TAG, "Waiting for the first TYPE message from the EV3 sensor. %d retries left", retries);
+    // First wait for the first TYPE message. It's always the first message!!!!
     while (message != TYPE)
     {
         message = this->readNextAvailableByte();
@@ -466,7 +466,7 @@ void EV3SensorPort::sensorCommThread()
     for (;;)
     {
         xSemaphoreTake(_serialMutex, portMAX_DELAY);
-        if (_connection->available() > 0)
+        if (_connection->available() >= MIN_BUFFER_LEVEL)
         {
             // Clear buffer
             std::fill(_buffer, _buffer + BUFFER_SIZE, 0);
@@ -495,6 +495,15 @@ void EV3SensorPort::sensorCommThread()
             }
             else
             {
+                if (_config.type == 0x20) { // TODO: Don't depend on device being a gyro!
+                    for(size_t i=0; i<4; i++){
+
+                    if(message != 0xC8){
+                        message=_connection->read();
+                        _buffer[0] = message;
+                    }
+                }
+            }
                 if (message & 0b11000000 == 0b11000000)
                 {
 

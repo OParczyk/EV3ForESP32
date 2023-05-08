@@ -1,0 +1,40 @@
+{
+    "name": "EV3ForESP32",
+    "keywords": "EV3, LEGO, Mindstorms, NXT, ESP32, Sensors, Motors",
+    "description": "EV3ForESP32 is an ESP32 Arduino libary for using both EV3 sensors and servo motors with an ESP32.",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/StefansProjects/EV3ForESP32.git"
+    },
+    "version": "0.1.0",
+    "authors":
+    [
+        {
+            "name": "Stefan Richter-Huber",
+            "maintainer": true
+        },
+        {
+            "name": "Oliver Parczyk"
+        }
+    ],
+    "license": "MIT",
+    "frameworks": "arduino",
+    "platforms": "espressif32",
+    "headers": ["EV3ColorSensor.h", "EV3GyroSensor.h", "EV3IRSensor.h", "EV3RegulatedMotor.h", "EV3SensorPort.h", "EV3UltrasonicSensor.h" ,"HiTechnicIRLink.h", "NXTUltrasonicSensor.h"],
+    "build": {
+        "libArchive": false
+    },
+    "dependencies":
+    [
+        {
+            "owner": "madhephaestus",
+            "name": "ESP32Encoder",
+            "version": "^0.10.1"
+        },
+        {
+            "owner": "plerup",
+            "name": "EspSoftwareSerial",
+            "version": "6.10.0"
+        }
+    ]
+}

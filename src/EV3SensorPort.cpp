@@ -435,8 +435,7 @@ void EV3SensorPort::begin_pinned(std::function<void(EV3SensorPort *)> onSuccess,
         this,
         1,
         &_sensorHandle, // Task handle
-        core
-    );
+        core);
 }
 
 /**
@@ -495,12 +494,26 @@ void EV3SensorPort::sensorCommThread()
             }
             else
             {
-                if (_config.type == 0x20) { // TODO: Don't depend on device being a gyro!
-                    for(size_t i=0; i<4; i++){
-
-                    if(message != 0xC8){
-                        message=_connection->read();
-                        _buffer[0] = message;
+                if (_config.type == 0x20)
+                { // TODO: Don't depend on device being a gyro!
+                    for (size_t i = 0; i < 4; i++)
+                    {
+                        if (message != 0xC8)
+                        {
+                            message = _connection->read();
+                            _buffer[0] = message;
+                        }
+                    }
+                }
+                else if (_config.type == 0x1E)
+                { // TODO: Don't depend on device being a ultrasonic sensor either!
+                    for (size_t i = 0; i < 4; i++)
+                    {
+                        if (message != 0xC8)
+                        {
+                            message = _connection->read();
+                            _buffer[0] = message;
+                        }
                     }
                 }
 

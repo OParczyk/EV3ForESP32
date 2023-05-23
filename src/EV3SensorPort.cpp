@@ -503,10 +503,9 @@ void EV3SensorPort::sensorCommThread()
                         _buffer[0] = message;
                     }
                 }
-            }
-                if (message & 0b11000000 == 0b11000000)
-                {
 
+                if ((message & 0b11000000) == 0b11000000)
+                {
                     uint8_t mode = message & 0b111;
                     uint8_t msgLength = 1 << ((message & 0b00111000) >> 3);
 
